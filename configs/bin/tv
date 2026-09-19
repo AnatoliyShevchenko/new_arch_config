@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""Управление телевизором LG (webOS) по сети. Без зависимостей.
+
+  tv pair       — спаривание: телевизор спросит разрешение, подтверди пультом
+  tv off        — выключить
+  tv on         — включить (Wake-on-LAN)
+  tv status     — доступен ли телевизор и открыты ли порты управления
+  tv vol        — показать громкость
+  tv vol N      — выставить громкость (0-100)
+  tv vol+ [N]   — прибавить N пунктов (по умолчанию 2)
+  tv vol- [N]   — убавить
+  tv mute       — переключить беззвучный режим
+  tv bl         — показать подсветку
+  tv bl N       — выставить подсветку (0-100)
+  tv bl+ [N]    — прибавить N пунктов (по умолчанию 10)
+  tv bl- [N]    — убавить
+"""
+import base64, json, os, socket, struct, sys, time
+
+TV_IP   = "192.168.1.239"
+TV_MAC  = "4c:1b:86:20:8c:2a"
+TV_PORT = 3000
+KEYFILE = os.path.expanduser("~/.config/lgtv/client-key")
+
+VOL_STEP = 2          # на сколько пунктов шагают vol+ / vol-
+BL_STEP = 10          # на сколько пунктов шагают bl+ / bl-
+# Громкость и подсветка дёргаются с геймпада, поэтому на выключенном телевизоре
+# команда должна отваливаться быстро — иначе подвиснет бинд. Но ответ ждём
+# дольше: setMute на webOS 4.0 отвечает до секунды, пока рисует плашку.
+BIND_CONNECT_TIMEOUT = 1.0
+BIND_TIMEOUT = 3
+
+HANDSHAKE = {
+    "type": "register",
+    "id": "register_0",
+    "payload": {
+        "forcePairing": False,
+        "pairingType": "PROMPT",
+        "manifest": {
+            "manifestVersion": 1,
+            "appVersion": "1.1",
+            "signed": {
+                "created": "20140509",
+                "appId": "com.lge.test",
+                "vendorId": "com.lge",
+                "localizedAppNames": {"": "LG Remote App"},
+                "localizedVendorNames": {"": "LG Electronics"},
+                "permissions": ["TEST_SECURE", "CONTROL_INPUT_TEXT",
+                    "CONTROL_MOUSE_AND_KEYBOARD", "READ_INSTALLED_APPS",
+                    "READ_LGE_SDX", "READ_NOTIFICATIONS", "SEARCH",
+                    "WRITE_SETTINGS", "WRITE_NOTIFICATION_ALERT", "CONTROL_POWER",
+                    "READ_CURRENT_CHANNEL", "READ_RUNNING_APPS", "READ_UPDATE_INFO",
+                    "UPDATE_FROM_REMOTE_APP", "READ_LGE_TV_INPUT_EVENTS",
+                    "READ_TV_CURRENT_TIME"],
+                "serial": "2f930e2d2cfe083771f68e4fe7bb07",
+            },
+            "permissions": ["LAUNCH", "LAUNCH_WEBAPP", "APP_TO_APP", "CLOSE",
+                "TEST_OPEN", "TEST_PROTECTED", "CONTROL_AUDIO", "CONTROL_DISPLAY",
+                "CONTROL_INPUT_JOYSTICK", "CONTROL_INPUT_MEDIA_RECORDING",
+                "CONTROL_INPUT_MEDIA_PLAYBACK", "CONTROL_INPUT_TV", "CONTROL_POWER",
+                "READ_APP_STATUS", "READ_CURRENT_CHANNEL", "READ_INPUT_DEVICE_LIST",
+                "READ_NETWORK_STATE", "READ_RUNNING_APPS", "READ_TV_CHANNEL_LIST",
+                "WRITE_NOTIFICATION_TOAST", "READ_POWER_STATE", "READ_COUNTRY_INFO",
+                "READ_SETTINGS"],
+            "signatures": [{
+                "signatureVersion": 1,
+                "signature": "eyJhbGdvcml0aG0iOiJSU0EtU0hBMjU2Iiwia2V5SWQiOiJ0ZXN0LXNpZ25pbmctY2VydCIsInNpZ25hdHVyZVZlcnNpb24iOjF9.hrVRgjCwXVvE2OOSpDZ58hR+59aFNwYDyjQgKk3auukd7pcegmE2CzPCa0bJ0ZsRAcKkCTJrWo5iDzNhMBWRyaMOv5zWSrthlf7G128qvIlpMT0YNY+n/FaOHE73uLrS/g7swl3/qH/BGFG2Hu4RlL48eb3lLKqTt2xKHdCs6Cd4RMfJPYnzgvI4BNrFUKsjkcu+WD4OO2A27Pq1n50cMchmcaXadJhGrOqH5YmHdOCj5NSHzJYrsW0HPlpuAx/ECMeIZYDh6RMqaFM2DXzdKX9NmmyqzJ3o/0lkk/N97gfVRLW5hA29yeAwaCViZNCP8iC9aO0q9fQojoa7NQnAtw==",
+            }],
+        },
+    },
+}
+
+
+# --- минимальный клиент WebSocket (RFC 6455), только то, что нужно ---
+
+def ws_connect(ip, port, timeout, connect_timeout=None):
+    sock = socket.create_connection((ip, port), timeout=connect_timeout or timeout)
+    sock.settimeout(timeout)
+    key = base64.b64encode(os.urandom(16)).decode()
+    sock.sendall((
+        f"GET / HTTP/1.1\r\nHost: {ip}:{port}\r\n"
+        "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    ).encode())
+    head = b""
+    while b"\r\n\r\n" not in head:
+        chunk = sock.recv(1)
+        if not chunk:
+            raise ConnectionError("телевизор закрыл соединение на рукопожатии")
+        head += chunk
+    if b"101" not in head.split(b"\r\n")[0]:
+        raise ConnectionError(f"неожиданный ответ: {head.splitlines()[0]!r}")
+    return sock
+
+
+def ws_send(sock, text):
+    payload = text.encode()
+    n, head = len(payload), bytearray([0x81])
+    if n < 126:
+        head.append(0x80 | n)
+    elif n < 65536:
+        head.append(0x80 | 126); head += struct.pack(">H", n)
+    else:
+        head.append(0x80 | 127); head += struct.pack(">Q", n)
+    mask = os.urandom(4)
+    head += mask
+    sock.sendall(bytes(head) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+
+def _read(sock, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("соединение закрыто")
+        buf += chunk
+    return buf
+
+
+def ws_recv(sock):
+    """Вернуть очередное текстовое сообщение, попутно отвечая на ping."""
+    while True:
+        b1, b2 = _read(sock, 2)
+        opcode, n = b1 & 0x0F, b2 & 0x7F
+        if n == 126:
+            n = struct.unpack(">H", _read(sock, 2))[0]
+        elif n == 127:
+            n = struct.unpack(">Q", _read(sock, 8))[0]
+        mask = _read(sock, 4) if b2 & 0x80 else None
+        data = _read(sock, n) if n else b""
+        if mask:
+            data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+        if opcode == 0x9:                      # ping -> pong
+            sock.sendall(b"\x8a\x80" + os.urandom(4))
+            continue
+        if opcode == 0x8:
+            raise ConnectionError("телевизор закрыл соединение")
+        if opcode in (0x1, 0x2):
+            return json.loads(data)
+
+
+# --- webOS ---
+
+def register(sock, timeout):
+    msg = json.loads(json.dumps(HANDSHAKE))
+    key = None
+    if os.path.exists(KEYFILE):
+        key = open(KEYFILE).read().strip() or None
+    if key:
+        msg["payload"]["client-key"] = key
+    ws_send(sock, json.dumps(msg))
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        sock.settimeout(max(1, deadline - time.time()))
+        resp = ws_recv(sock)
+        if resp.get("type") == "registered":
+            new = resp["payload"]["client-key"]
+            if new != key:
+                os.makedirs(os.path.dirname(KEYFILE), exist_ok=True)
+                with open(KEYFILE, "w") as f:
+                    f.write(new)
+                os.chmod(KEYFILE, 0o600)
+                print(f"client-key сохранён в {KEYFILE}")
+            return
+        if resp.get("type") == "error":
+            raise RuntimeError(resp.get("error", resp))
+        if resp.get("payload", {}).get("pairingType") == "PROMPT":
+            print("На телевизоре появился запрос — подтверди его пультом...")
+    raise TimeoutError("телевизор не подтвердил спаривание")
+
+
+class Session:
+    """Одно соединение, сколько угодно запросов. Регистрация стоит дорого."""
+
+    def __init__(self, timeout=15, connect_timeout=None):
+        self.sock = ws_connect(TV_IP, TV_PORT, timeout, connect_timeout)
+        try:
+            register(self.sock, timeout)
+        except Exception:
+            self.sock.close()
+            raise
+        self.n = 0
+
+    def request(self, uri, payload=None):
+        self.n += 1
+        msg = {"id": f"req_{self.n}", "type": "request", "uri": uri}
+        if payload is not None:
+            msg["payload"] = payload
+        ws_send(self.sock, json.dumps(msg))
+        resp = ws_recv(self.sock)
+        body = resp.get("payload", {})
+        if resp.get("type") == "error" or not body.get("returnValue", True):
+            raise RuntimeError(resp.get("error") or body.get("errorText") or resp)
+        return body
+
+    def luna(self, uri, params):
+        """Вызвать внутренний luna-сервис в обход закрытого ssap.
+
+        Публичный API таких URI не отдаёт, поэтому используем системный alert:
+        создаём его с хуком onclose на нужный luna-URI и сразу закрываем —
+        хук срабатывает. Ответа от самого сервиса при этом не видно, так что
+        результат проверяется отдельным чтением.
+        """
+        r = self.request(CREATE_ALERT, {
+            "message": " ",
+            "buttons": [{"label": "", "onClick": uri, "params": params}],
+            "onclose": {"uri": uri, "params": params},
+            "onfail": {"uri": uri, "params": params},
+        })
+        alert_id = r.get("alertId")
+        if alert_id is None:
+            raise RuntimeError(f"телевизор не создал alert: {r}")
+        self.request(CLOSE_ALERT, {"alertId": alert_id})
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.sock.close()
+
+
+def request(uri, payload=None, timeout=15):
+    with Session(timeout) as s:
+        return s.request(uri, payload)
+
+
+# --- громкость ---
+
+def vol_show():
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        return s.request("ssap://audio/getVolume")
+
+
+def vol_set(value):
+    value = max(0, min(100, value))
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        s.request("ssap://audio/setVolume", {"volume": value})
+    return value
+
+
+def vol_step(delta):
+    """Прибавить/убавить. getVolume и setVolume — в одном соединении."""
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        cur = s.request("ssap://audio/getVolume")["volume"]
+        new = max(0, min(100, cur + delta))
+        if new != cur:
+            s.request("ssap://audio/setVolume", {"volume": new})
+        return new
+
+
+def vol_mute():
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        new = not s.request("ssap://audio/getVolume")["muted"]
+        s.request("ssap://audio/setMute", {"mute": new})
+        return new
+
+
+# --- подсветка ---
+
+# Прямой ssap://settings/setSystemSettings телевизор не отдаёт (401 даже
+# с WRITE_SETTINGS), поэтому запись идёт через Session.luna. Чтение — обычным
+# ssap, но осторожно: один несуществующий ключ роняет весь запрос с 500.
+# На этой модели живы только backlight, brightness, contrast и color.
+GET_SETTINGS = "ssap://settings/getSystemSettings"
+CREATE_ALERT = "ssap://system.notifications/createAlert"
+CLOSE_ALERT = "ssap://system.notifications/closeAlert"
+LUNA_SET_SETTINGS = "luna://com.webos.settingsservice/setSystemSettings"
+
+
+def _bl_get(s):
+    r = s.request(GET_SETTINGS, {"category": "picture", "keys": ["backlight"]})
+    # Тип зависит от того, чем значение записали в прошлый раз: с завода
+    # приходит число, после нашей записи через luna — строка. Приводим сами.
+    return int(r["settings"]["backlight"])
+
+
+def _bl_put(s, value):
+    # Значение уходит строкой — именно так проверено, что телевизор его принимает.
+    s.luna(LUNA_SET_SETTINGS,
+           {"category": "picture", "settings": {"backlight": str(value)}})
+
+
+def bl_show():
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        return _bl_get(s)
+
+
+def bl_set(value):
+    value = max(0, min(100, value))
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        _bl_put(s, value)
+    return value
+
+
+def bl_step(delta):
+    """Прибавить/убавить. Чтение и запись — в одном соединении."""
+    with Session(BIND_TIMEOUT, BIND_CONNECT_TIMEOUT) as s:
+        cur = _bl_get(s)
+        new = max(0, min(100, cur + delta))
+        if new != cur:
+            _bl_put(s, new)
+        return new
+
+
+def wake():
+    mac = bytes.fromhex(TV_MAC.replace(":", ""))
+    packet = b"\xff" * 6 + mac * 16
+    for target in ("255.255.255.255", "192.168.1.255"):
+        for port in (9, 7):
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            try:
+                s.sendto(packet, (target, port))
+            except OSError as e:
+                print(f"  {target}:{port} — {e}")
+            finally:
+                s.close()
+    print(f"магический пакет отправлен на {TV_MAC}")
+
+
+def status():
+    r = os.system(f"ping -c1 -W2 {TV_IP} >/dev/null 2>&1")
+    print(f"ping {TV_IP}: {'отвечает' if r == 0 else 'молчит'}")
+    for p in (3000, 3001):
+        s = socket.socket(); s.settimeout(2)
+        ok = s.connect_ex((TV_IP, p)) == 0
+        s.close()
+        print(f"порт {p}: {'открыт' if ok else 'закрыт'}")
+    print(f"client-key: {'есть' if os.path.exists(KEYFILE) else 'нет, нужен `tv pair`'}")
+
+
+def numeric_arg():
+    """Необязательный числовой аргумент команды, или None."""
+    arg = sys.argv[2] if len(sys.argv) > 2 else None
+    if arg is None:
+        return None
+    if not arg.lstrip("-").isdigit():
+        sys.exit(f"ожидалось число, получено: {arg!r}")
+    return int(arg)
+
+
+cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+try:
+    if cmd == "pair":
+        sock = ws_connect(TV_IP, TV_PORT, 60)
+        try:
+            register(sock, 60)
+            print("спаривание прошло")
+        finally:
+            sock.close()
+    elif cmd == "off":
+        print(request("ssap://system/turnOff"))
+    elif cmd == "on":
+        wake()
+    elif cmd in ("vol", "vol+", "vol-"):
+        arg = numeric_arg()
+        if cmd == "vol" and arg is None:
+            p = vol_show()
+            print(f"громкость {p['volume']}" + (" (без звука)" if p["muted"] else ""))
+        elif cmd == "vol":
+            print(f"громкость {vol_set(arg)}")
+        else:
+            step = arg if arg is not None else VOL_STEP
+            print(f"громкость {vol_step(step if cmd == 'vol+' else -step)}")
+    elif cmd in ("bl", "bl+", "bl-"):
+        arg = numeric_arg()
+        if cmd == "bl" and arg is None:
+            print(f"подсветка {bl_show()}")
+        elif cmd == "bl":
+            print(f"подсветка {bl_set(arg)}")
+        else:
+            step = arg if arg is not None else BL_STEP
+            print(f"подсветка {bl_step(step if cmd == 'bl+' else -step)}")
+    elif cmd == "mute":
+        print("без звука" if vol_mute() else "звук включён")
+    elif cmd == "status":
+        status()
+    else:
+        sys.exit(__doc__)
+except Exception as e:
+    sys.exit(f"ошибка: {type(e).__name__}: {e}")

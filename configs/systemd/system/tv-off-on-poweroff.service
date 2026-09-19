@@ -1,0 +1,24 @@
+# Гасит телевизор LG вместе с компьютером.
+#
+# Вся работа в ExecStop: во время выключения сеть ещё жива, а после
+# poweroff.target её уже нет. After=network-online.target разворачивается
+# при остановке в обратный порядок, поэтому юнит успевает сходить в сеть
+# до того, как NetworkManager ляжет.
+#
+# Проверка poweroff.target в list-jobs отделяет выключение от перезагрузки:
+# при reboot в очереди стоит reboot.target, и телевизор не трогаем.
+[Unit]
+Description=Turn off the LG TV when the machine powers off
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=HOME=/home/brick
+ExecStart=/bin/true
+ExecStop=/bin/sh -c 'if systemctl list-jobs | grep -q poweroff.target; then /home/brick/.local/bin/tv off; fi; exit 0'
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

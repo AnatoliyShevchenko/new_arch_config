@@ -1,0 +1,11 @@
+[Unit]
+Description=Disable AMD CPU Boost
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo 0 > /sys/devices/system/cpu/cpufreq/boost'
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target

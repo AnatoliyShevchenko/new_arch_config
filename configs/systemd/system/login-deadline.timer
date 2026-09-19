@@ -1,0 +1,10 @@
+[Unit]
+Description=Дедлайн на логин после загрузки
+
+[Timer]
+OnBootSec=10min
+AccuracySec=10s
+Unit=login-deadline.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+android-studio
+faugus-launcher
+google-chrome
+input-remapper-bin
+jellyfin-desktop-git
+noctalia-greeter
+onlyoffice-bin
+postman-bin
+ttf-ms-fonts
+visual-studio-code-bin

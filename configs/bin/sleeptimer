@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# Отложенное выключение компьютера.
+#
+#   sleeptimer            — перебрать по кругу: 30 -> 60 -> 90 -> 120 -> отмена
+#   sleeptimer 45         — выключить через 45 минут
+#   sleeptimer cancel     — отменить
+#   sleeptimer status     — сколько осталось
+#
+# Таймер живёт как транзитный пользовательский юнит systemd, поэтому
+# переживает закрытие терминала и виден в `systemctl --user list-timers`.
+#
+# За минуту до выключения (WARN_SEC) показывается плашка и СРАЗУ начинается
+# закрытие окон: сначала вежливо, как по крестику, потом SIGTERM тем, кто
+# окно закрыл, но процесс оставил. Так у приложений есть вся минута, а не
+# двадцать секунд впритык к poweroff. Обратная сторона: отмена после плашки
+# машину спасёт, а уже закрытые окна — нет.
+
+set -uo pipefail
+
+UNIT=sleeptimer
+STATE="${XDG_RUNTIME_DIR:-/tmp}/sleeptimer.state"
+STEPS=(30 60 90 120)
+WARN_SEC=60          # за сколько до выключения предупредить и начать закрывать
+CLOSE_GRACE=40       # ждём, пока окна уйдут сами, прежде чем слать SIGTERM
+TERM_GRACE=15        # ждём после SIGTERM, прежде чем звать poweroff
+SELF=$(readlink -f "$0")
+
+notify() { noctalia msg notification-show "$1" "$2" >/dev/null 2>&1 || true; }
+
+active() { systemctl --user is-active --quiet "$UNIT.timer"; }
+
+cancel_units() {
+    for u in "$UNIT" "$UNIT-warn"; do
+        systemctl --user stop "$u.timer" >/dev/null 2>&1
+        systemctl --user stop "$u.service" >/dev/null 2>&1
+    done
+    rm -f "$STATE"
+}
+
+clients_json() { hyprctl -j clients 2>/dev/null; }
+
+# Оставшиеся окна, по строке "class | title". Пусто — значит закрылись все.
+list_windows() {
+    clients_json | python3 -c 'import json,sys
+try:
+    for w in json.load(sys.stdin): print(w.get("class","?"), "|", w.get("title","?"))
+except Exception: pass' 2>/dev/null
+}
+
+# PID-ы процессов, за которыми ещё числятся окна, без повторов.
+client_pids() {
+    clients_json | python3 -c 'import json,sys
+try: print("\n".join(sorted({str(w["pid"]) for w in json.load(sys.stdin) if w.get("pid", 0) > 0})))
+except Exception: pass' 2>/dev/null
+}
+
+# Ждёт до $1 секунд, пока окна не кончатся. 0 — кончились.
+wait_windows() {
+    local i
+    for i in $(seq "$1"); do
+        [[ -z "$(list_windows)" ]] && return 0
+        sleep 1
+    done
+    [[ -z "$(list_windows)" ]]
+}
+
+# Просим окна закрыться так же, как по крестику: приложение успевает
+# сохраниться и спросить пользователя. Кто окно закрыл, но процесс оставил
+# (привет, торрент), получает SIGTERM — иначе его добьёт SIGKILL уже посреди
+# выключения, на середине записи. Аргументы — сколько ждать на каждом шаге.
+close_windows() {
+    local grace=${1:-$CLOSE_GRACE} term_grace=${2:-$TERM_GRACE}
+    local addrs
+    addrs=$(clients_json | python3 -c 'import json,sys
+try: print("\n".join(w["address"] for w in json.load(sys.stdin)))
+except Exception: pass' 2>/dev/null)
+    [[ -z "$addrs" ]] && return 0
+    local a
+    for a in $addrs; do
+        hyprctl dispatch closewindow "address:$a" >/dev/null 2>&1
+    done
+    wait_windows "$grace" && return 0
+
+    # stdout транзитного юнита уходит в journal — разбирать потом по нему.
+    local pids
+    pids=$(client_pids)
+    if [[ -n "$pids" ]]; then
+        echo "не закрылись за ${grace}s, шлю SIGTERM: $(echo "$pids" | tr '\n' ' ')"
+        echo "$(list_windows)" | sed 's/^/  /'
+        kill -TERM $pids 2>/dev/null
+    fi
+    wait_windows "$term_grace" && return 0
+
+    local left; left=$(list_windows)
+    echo "пережили SIGTERM:"
+    echo "$left" | sed 's/^/  /'
+    notify "Выключение" "Не дождался: $(echo "$left" | wc -l) окн."
+    return 1
+}
+
+# Запускается за WARN_SEC до выключения: предупреждаем и сразу начинаем
+# закрывать, чтобы у приложений была вся минута.
+prepare_shutdown() {
+    notify "Выключение через минуту" "Закрываю окна. View+X — отмена"
+    close_windows || true
+}
+
+poweroff_now() {
+    # Штатно окна закрыл prepare_shutdown минуту назад. Сюда попадаем, если
+    # таймер был короче минуты или кто-то открылся следом — добираем остатки,
+    # но уже быстро, чтобы не растягивать выключение.
+    if [[ -n "$(list_windows)" ]]; then
+        notify "Выключение" "Закрываю окна"
+        close_windows 10 5 || true
+    fi
+    rm -f "$STATE"
+    exec /usr/bin/systemctl poweroff
+}
+
+set_timer() {
+    local min=$1
+    if ! [[ "$min" =~ ^[0-9]+$ ]] || (( min < 1 )); then
+        echo "нужно целое число минут больше нуля" >&2; return 1
+    fi
+    cancel_units
+    if ! systemd-run --user --on-active="${min}m" --unit="$UNIT" \
+            "$SELF" poweroff-now >/dev/null 2>&1; then
+        echo "не удалось поставить таймер" >&2; return 1
+    fi
+    local warn=$(( min * 60 - WARN_SEC ))
+    (( warn < 1 )) && warn=1      # для совсем коротких таймеров — сразу
+    systemd-run --user --on-active="${warn}s" --unit="$UNIT-warn" \
+        "$SELF" prepare-shutdown >/dev/null 2>&1
+    local at; at=$(date -d "+${min} minutes" +%H:%M)
+    echo "$min $(( $(date +%s) + min * 60 ))" > "$STATE"
+    echo "выключение через ${min} мин, в ${at}"
+    notify "Таймер выключения: ${min} мин" "Компьютер выключится в ${at}"
+}
+
+status() {
+    if ! active; then echo "таймер не заведён"; return; fi
+    local deadline left
+    deadline=$(cut -d' ' -f2 "$STATE" 2>/dev/null)
+    if [[ -z "$deadline" ]]; then echo "таймер заведён"; return; fi
+    left=$(( (deadline - $(date +%s) + 59) / 60 ))
+    echo "до выключения ${left} мин (в $(date -d "@$deadline" +%H:%M))"
+}
+
+cycle() {
+    if ! active; then set_timer "${STEPS[0]}"; return; fi
+    local cur; cur=$(cut -d' ' -f1 "$STATE" 2>/dev/null)
+    local i
+    for i in "${!STEPS[@]}"; do
+        if [[ "${STEPS[$i]}" == "$cur" ]]; then
+            if (( i + 1 < ${#STEPS[@]} )); then
+                set_timer "${STEPS[$((i + 1))]}"
+            else
+                cancel_units
+                echo "таймер отменён"
+                notify "Таймер выключения отменён" "Компьютер продолжит работать"
+            fi
+            return
+        fi
+    done
+    set_timer "${STEPS[0]}"
+}
+
+case "${1-}" in
+    "")            cycle ;;
+    cancel|off)    cancel_units; echo "таймер отменён"
+                   notify "Таймер выключения отменён" "Компьютер продолжит работать" ;;
+    status)        status ;;
+    poweroff-now)  poweroff_now ;;   # зовёт таймер, руками не нужно
+    prepare-shutdown) prepare_shutdown ;;  # его же зовёт warn-таймер
+    -h|--help)     sed -n '2,9p' "$0" | sed 's/^# \?//' ;;
+    *)             set_timer "$1" ;;
+esac

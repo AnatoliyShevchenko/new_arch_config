@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Показать, какие события шлёт геймпад.
+
+На время работы снимает перехват input-remapper (иначе устройство захвачено
+и события до нас не доходят), по окончании возвращает пресет на место.
+"""
+import subprocess, sys, time
+import evdev
+from evdev import ecodes
+
+DEV = "/dev/input/event27"
+SECONDS = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+
+def remapper(cmd):
+    subprocess.run(["input-remapper-control", "--command", cmd],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+print(f"Снимаю перехват, слушаю {SECONDS} секунд.")
+print("Нажми по очереди: View, потом X, потом View+X вместе.\n")
+remapper("stop-all")
+time.sleep(0.5)
+try:
+    dev = evdev.InputDevice(DEV)
+    held = set()
+    deadline = time.time() + SECONDS
+    while time.time() < deadline:
+        r = dev.read_one()
+        if r is None:
+            time.sleep(0.01)
+            continue
+        if r.type == ecodes.EV_KEY:
+            name = ecodes.bytype[ecodes.EV_KEY].get(r.code, "?")
+            if isinstance(name, (list, tuple)):
+                name = "/".join(name)
+            if r.value == 1:
+                held.add(name)
+                print(f"  нажата   {name:22} code={r.code}   зажато: {sorted(held)}")
+            elif r.value == 0:
+                held.discard(name)
+                print(f"  отпущена {name:22} code={r.code}   зажато: {sorted(held)}")
+finally:
+    print("\nВозвращаю пресет.")
+    remapper("autoload")

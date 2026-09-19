@@ -1,0 +1,13 @@
+[terminal]
+vt = 1
+
+[default_session]
+
+# --session задаёт сессию, выбранную в гритере по умолчанию. Имя должно в точности
+# совпадать со строкой из `noctalia-greeter sessions` (она берётся из Name= в
+# /usr/share/wayland-sessions/*.desktop). Без этого гритер на чистой системе может
+# подставить обычный "Hyprland" — то есть /usr/bin/start-hyprland мимо uwsm.
+# Строку запускает sh, поэтому имя с пробелами и скобками берём в одинарные кавычки.
+command = "/usr/bin/noctalia-greeter-session -- --session 'Hyprland (uwsm-managed)'"
+
+user = "greeter"

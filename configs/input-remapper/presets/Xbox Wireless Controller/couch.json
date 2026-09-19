@@ -1,0 +1,349 @@
+[
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 0,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "mouse",
+        "output_type": 2,
+        "output_code": 0,
+        "name": "cursor X",
+        "mapping_type": "analog",
+        "deadzone": 0.15,
+        "gain": 0.4,
+        "expo": 0.6
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 1,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "mouse",
+        "output_type": 2,
+        "output_code": 1,
+        "name": "cursor Y",
+        "mapping_type": "analog",
+        "deadzone": 0.15,
+        "gain": 0.4,
+        "expo": 0.6
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 5,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "mouse",
+        "output_type": 2,
+        "output_code": 8,
+        "name": "scroll",
+        "mapping_type": "analog",
+        "deadzone": 0.2,
+        "gain": -1.0
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 9,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": 30
+            }
+        ],
+        "target_uinput": "mouse",
+        "output_symbol": "BTN_LEFT",
+        "name": "RT = left click",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 10,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": 30
+            }
+        ],
+        "target_uinput": "mouse",
+        "output_symbol": "BTN_RIGHT",
+        "name": "LT = right click",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 16,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": -1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_LEFT",
+        "name": "dpad left",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 16,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": 1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_RIGHT",
+        "name": "dpad right",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 17,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": -1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_UP",
+        "name": "dpad up",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 3,
+                "code": 17,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": 1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_DOWN",
+        "name": "dpad down",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 304,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_ENTER",
+        "name": "A = Enter",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 305,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_ESC",
+        "name": "B = Esc",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 310,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, key(KEY_LEFTBRACE))",
+        "name": "LB = workspace prev",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 311,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, key(KEY_RIGHTBRACE))",
+        "name": "RB = workspace next",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 316,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, key(KEY_SPACE))",
+        "name": "Xbox = launcher",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 314,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 1,
+                "code": 315,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, key(KEY_M))",
+        "name": "View+Menu = power menu",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 314,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 1,
+                "code": 307,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, modify(KEY_LEFTSHIFT, key(KEY_M)))",
+        "name": "View+X = sleep timer",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 315,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 1,
+                "code": 307,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, key(KEY_C))",
+        "name": "Menu+X = close window",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 314,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 3,
+                "code": 17,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": -1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, modify(KEY_LEFTSHIFT, hold_keys(KEY_UP)))",
+        "name": "View+dpad up = TV volume up",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 314,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 3,
+                "code": 17,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": 1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, modify(KEY_LEFTSHIFT, hold_keys(KEY_DOWN)))",
+        "name": "View+dpad down = TV volume down",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 315,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 3,
+                "code": 17,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": -1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, modify(KEY_LEFTCTRL, hold_keys(KEY_UP)))",
+        "name": "Menu+dpad up = TV backlight up",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 315,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 3,
+                "code": 17,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d",
+                "analog_threshold": 1
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "modify(KEY_LEFTMETA, modify(KEY_LEFTCTRL, hold_keys(KEY_DOWN)))",
+        "name": "Menu+dpad down = TV backlight down",
+        "mapping_type": "key_macro"
+    },
+    {
+        "input_combination": [
+            {
+                "type": 1,
+                "code": 315,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            },
+            {
+                "type": 1,
+                "code": 308,
+                "origin_hash": "fd59f7bcef9cde578fc75b2279c2741d"
+            }
+        ],
+        "target_uinput": "keyboard",
+        "output_symbol": "KEY_F11",
+        "name": "Menu+Y = fullscreen",
+        "mapping_type": "key_macro"
+    }
+]

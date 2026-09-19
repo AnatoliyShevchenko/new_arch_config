@@ -1,0 +1,170 @@
+config_version = 14
+
+[bar.default]
+background_opacity = 0.4999999888241291
+center = [ "clock", "media", "screen-owner" ]
+end = [
+    "tray",
+    "notifications",
+    "clipboard",
+    "network",
+    "bluetooth",
+    "keyboard_layout",
+    "volume",
+    "brightness",
+    "battery",
+    "control-center",
+    "session"
+]
+margin_ends = 0
+start = [ "launcher", "wallpaper", "workspaces", "wallhaven", "dns-switcher", "monitor" ]
+
+[location]
+auto_locate = true
+
+[lockscreen_widgets]
+enabled = false
+schema_version = 2
+widget_order = [ "lockscreen-login-box@FALLBACK", "lockscreen-login-box@HDMI-A-1", "lockscreen-login-box@HDMI-A-2" ]
+
+    [lockscreen_widgets.grid]
+    cell_size = 16
+    major_interval = 4
+    visible = true
+
+    [lockscreen_widgets.widget."lockscreen-login-box@FALLBACK"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 960.0
+    cy = 898.0
+    output = "FALLBACK"
+    placement_height = 1080.0
+    placement_width = 1920.0
+    rotation = 0.0
+    type = "login_box"
+
+        [lockscreen_widgets.widget."lockscreen-login-box@FALLBACK".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
+
+    [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-1"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 540.0
+    cy = 1596.4444580078125
+    output = "HDMI-A-1"
+    placement_height = 1920.0
+    placement_width = 1080.0
+    rotation = 0.0
+    type = "login_box"
+
+        [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-1".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
+
+    [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-2"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 1536.0
+    cy = 1582.4000244140625
+    output = "HDMI-A-2"
+    placement_height = 1728.0
+    placement_width = 3072.0
+    rotation = 0.0
+    type = "login_box"
+
+        [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-2".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
+
+[plugin_settings."noctalia/wallhaven"]
+api_key = ""
+download_dir = "/home/brick/Pictures/desktop"
+
+[plugins]
+enabled = [ "noctalia/wallhaven", "nomadcxx/gamer-mode", "nightwatch75/dns-switcher", "brick/screen-owner" ]
+
+    [[plugins.source]]
+    kind = "git"
+    location = "https://github.com/noctalia-dev/official-plugins"
+    name = "official"
+
+    [[plugins.source]]
+    kind = "git"
+    location = "https://github.com/noctalia-dev/community-plugins"
+    name = "community"
+
+    [[plugins.source]]
+    kind = "git"
+    location = "https://github.com/AnatoliyShevchenko/noctalia-screen-owner"
+    name = "personal"
+
+[shell]
+avatar_path = "/home/brick/Pictures/profile/profile.jpeg"
+lang = "ru"
+
+[theme]
+builtin = "Noctalia"
+mode = "dark"
+source = "wallpaper"
+wallpaper_scheme = "m3-content"
+
+[wallpaper.default]
+path = "/home/brick/Pictures/desktop/wallhaven-xek57v.jpg"
+
+[wallpaper.last]
+path = "/home/brick/Pictures/desktop/wallhaven-w5q5kq.jpg"
+
+[wallpaper.monitors.HDMI-A-1]
+path = "/home/brick/Pictures/desktop/wallhaven-w5q5kq.jpg"
+
+[wallpaper.monitors.HDMI-A-2]
+path = "/home/brick/Pictures/desktop/wallhaven-xek57v.jpg"
+
+[widget.dns-switcher]
+type = "nightwatch75/dns-switcher:dns-switcher"
+
+[widget.monitor]
+type = "nomadcxx/gamer-mode:monitor"
+
+[widget.screen-owner]
+type = "brick/screen-owner:screen-owner"
+
+[widget.wallhaven]
+type = "noctalia/wallhaven:wallhaven"

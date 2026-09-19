@@ -1,0 +1,7 @@
+[Unit]
+Description=Выключение, если после загрузки никто не залогинился
+ConditionPathExists=!/etc/login-deadline.disabled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/login-deadline

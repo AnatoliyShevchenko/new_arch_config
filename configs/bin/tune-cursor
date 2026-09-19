@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+"""Подкрутить скорость курсора с левого стика в пресете input-remapper.
+
+  tune-cursor              — показать текущие значения
+  tune-cursor 0.4          — задать gain (скорость)
+  tune-cursor 0.4 0.6      — задать gain и expo (плавность у центра)
+
+gain: множитель скорости. 1.0 — как было, меньше — медленнее.
+expo: 0..1, насколько вяло реагирует стик у центра при той же максималке.
+      0 — линейно, 0.6 — заметно точнее в мелких движениях.
+"""
+import json, subprocess, sys
+
+PRESET = "/home/brick/.config/input-remapper-2/presets/Xbox Wireless Controller/couch.json"
+CURSOR = {"cursor X", "cursor Y"}
+
+data = json.load(open(PRESET))
+cursor = [m for m in data if m.get("name") in CURSOR]
+if not cursor:
+    sys.exit("в пресете нет маппингов курсора")
+
+if len(sys.argv) == 1:
+    for m in cursor:
+        print(f"{m['name']}: gain={m.get('gain', 1.0)} expo={m.get('expo', 0)} deadzone={m.get('deadzone', 0.1)}")
+    sys.exit()
+
+gain = float(sys.argv[1])
+expo = float(sys.argv[2]) if len(sys.argv) > 2 else None
+for m in cursor:
+    m["gain"] = gain
+    if expo is not None:
+        m["expo"] = expo
+
+json.dump(data, open(PRESET, "w"), indent=4)
+open(PRESET, "a").write("\n")
+print(f"gain={gain}" + (f" expo={expo}" if expo is not None else ""))
+subprocess.run(["input-remapper-control", "--command", "autoload"], check=True)

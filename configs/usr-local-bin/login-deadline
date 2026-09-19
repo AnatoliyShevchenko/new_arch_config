@@ -1,0 +1,20 @@
+#!/bin/bash
+# Гасит машину, если через N минут после загрузки никто так и не залогинился.
+# greetd держит greeter под uid 964, поэтому настоящим логином считаем
+# любую сессию с uid >= 1000 (в том числе ssh — по ssh тоже не выключаем).
+
+set -u
+
+if loginctl list-sessions --no-legend | awk '$2+0 >= 1000 { found = 1 } END { exit !found }'; then
+    echo "сессия пользователя найдена, выключение отменено"
+    exit 0
+fi
+
+echo "логина не было, выключаюсь"
+
+if [[ "${LOGIN_DEADLINE_DRY_RUN:-0}" == 1 ]]; then
+    echo "DRY_RUN=1 — poweroff пропущен"
+    exit 0
+fi
+
+systemctl poweroff

@@ -1,0 +1,9 @@
+# Побочные продукты запуска скриптов из configs/bin и configs/input-remapper.
+# Каталог рядом с configs/bin/ ломает установку: couch-control.sh раскладывает
+# их глобом через `install -m 755`, а install без -d на каталоге падает.
+__pycache__/
+*.pyc
+
+# install-packages.sh клонирует paru в текущий каталог, а install.sh обычно
+# запускают прямо из клона репозитория.
+/paru/

@@ -1,0 +1,10 @@
+anthropic.claude-code
+charliermarsh.ruff
+cweijan.dbclient-jdbc
+cweijan.vscode-database-client2
+ms-ceintl.vscode-language-pack-ru
+ms-python.debugpy
+ms-python.python
+ms-python.vscode-pylance
+ms-python.vscode-python-envs
+pkief.material-icon-theme
