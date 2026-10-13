@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: redis
+data:
+  redis.conf: |
+    port 6379
+    dir /data
+    appendonly yes                   
+    maxmemory 1gb
+    maxmemory-policy noeviction
+    aclfile /etc/redis-acl/users.acl
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: redis
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-lb
+  namespace: redis
+spec:
+  type: LoadBalancer
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+
+---
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+      annotations:
+        # Под перезапускается при изменении конфига, только если поменять это значение.
+        # Для начала можно просто делать kubectl rollout restart.
+        config-version: "1"
+    spec:
+      securityContext:
+        fsGroup: 999                  # uid/gid redis в образе
+      containers:
+        - name: redis
+          image: valkey/valkey:9.1.2-trixie
+          args: ["/usr/local/etc/redis/redis.conf"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /usr/local/etc/redis
+              readOnly: true
+            - name: acl
+              mountPath: /etc/redis-acl
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 2Gi             # ~2x maxmemory: fork при перезаписи AOF копирует страницы
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+        - name: acl
+          secret:
+            secretName: redis-acl
+            defaultMode: 0440         # файл с паролями не должны читать все подряд
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path-retain
+        resources:
+          requests:
+            storage: 5Gi

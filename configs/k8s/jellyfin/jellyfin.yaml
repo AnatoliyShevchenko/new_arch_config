@@ -89,7 +89,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: jellyfin.__BASE_DOMAIN__
+    - host: jellyfin.temp-brick.asia
       http:
         paths:
           - path: /

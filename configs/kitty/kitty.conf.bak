@@ -1,0 +1,8 @@
+# Шрифт
+font_family      MesloLGS Nerd Font
+font_size        13.0
+
+# Прозрачность
+background_opacity 0.85
+
+shell /usr/bin/zsh

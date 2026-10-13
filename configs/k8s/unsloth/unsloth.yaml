@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: unsloth
+
+---
+
+# StatefulSet тут не нужен: реплика одна, а стабильное имя и headless-сервис ни к чему.
+# Deployment + Recreate + отдельные PVC проще. Два пода сразу не встанут и так:
+# карта одна, а под с limits nvidia.com/gpu: 1 без свободной карты останется в Pending.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: studio-data                # аккаунты, чаты, LoRA, экспорты (/opt/unsloth-studio)
+  namespace: unsloth
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 100Gi               # local-path размер не соблюдает, это для себя
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-cache                   # скачанные модели и датасеты, быстро разрастается
+  namespace: unsloth
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 150Gi
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: unsloth
+  namespace: unsloth
+spec:
+  selector:
+    app: unsloth
+  ports:
+    - name: studio
+      port: 8000
+      targetPort: 8000
+    # Jupyter (8888) в образе стартует всегда, но наружу не публикуем.
+    # Нужен ноутбук — kubectl -n unsloth port-forward deploy/unsloth 8888
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unsloth
+  namespace: unsloth
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                 # старый под отдаёт GPU и тома раньше, чем стартует новый
+  selector:
+    matchLabels:
+      app: unsloth
+  template:
+    metadata:
+      labels:
+        app: unsloth
+    spec:
+      runtimeClassName: nvidia     # дефолтный runtime в k3s — runc, без этого CUDA не увидит карту
+      # при остановке Studio доучивает текущий шаг и пишет чекпойнт; supervisord в образе ждёт его
+      # до 150 с (UNSLOTH_STUDIO_STOP_WAIT_S), значит здесь строго больше 150
+      terminationGracePeriodSeconds: 180
+      containers:
+        - name: unsloth
+          image: unsloth/unsloth@sha256:86cac86006cf7eb279f4b64afb7dd68df2bd8b983f9f3d7427ceb4ff32ca3fd4
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: unsloth-passwords
+          ports:
+            - name: studio
+              containerPort: 8000
+          volumeMounts:
+            - name: studio-data
+              mountPath: /opt/unsloth-studio          # код entrypoint сам перелинкует из /opt/unsloth-studio-app
+            - name: hf-cache
+              mountPath: /workspace/.cache/huggingface
+            - name: dshm
+              mountPath: /dev/shm                     # замена --ipc=host
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              memory: 24Gi         # в лимит входит и /dev/shm ниже
+              nvidia.com/gpu: 1    # для extended-ресурсов requests можно не писать, возьмётся из limits
+          # HTTP-эндпоинт здоровья у Studio я не проверял, поэтому просто проверка порта.
+          # startupProbe даёт до 10 минут на первый старт, пока liveness не начал убивать под
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 30
+            failureThreshold: 5
+      volumes:
+        - name: studio-data
+          persistentVolumeClaim:
+            claimName: studio-data
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi           # для чата хватает; под обучение с воркерами DataLoader вернуть 4Gi
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unsloth
+  namespace: unsloth
+spec:
+  ingressClassName: traefik        # серт — wildcard из дефолтного TLSStore, как у minio
+  rules:
+    - host: unsloth.temp-brick.asia
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: unsloth
+                port:
+                  number: 8000
